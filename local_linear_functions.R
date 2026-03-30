@@ -6,6 +6,8 @@
 
 ## Evaluate the local likelihood with 4 parameters: 
 # par=c(a0, a1, b0, b1)
+# around a point t0
+#
 # t0: point around which we calculate local likelihood
 # t, y vectors of length m with the observed data
 # wt vector of length m with the weights of (t[i],y[i])
@@ -34,6 +36,8 @@ local_log_lik <- function(par, t0, t, y, wt, myBeta=FALSE, mv=FALSE){
 
 ## Evaluate MINUS the local likelihood with 4 parameters: 
 #     par=c(a0, a1, b0, b1) 
+# around a point t0
+#
 #  It also computes the gradient and Hessian, which
 #  are attached to the result as attributes, to allow
 #  the use of function "nlm" to do minimization
@@ -157,7 +161,6 @@ matrix_grad_local_log_lik <- function(par, t0, t, y, wt){
   m <- length(t_t0)
   
   X <- cbind(rep(1,m),t_t0)
-  W <- diag(wt[Iwt])
   
   delta <- a0+a1*t_t0 # vector of length equal to length(t)
   eta   <- b0+b1*t_t0 # vector of length equal to length(t)
@@ -170,8 +173,11 @@ matrix_grad_local_log_lik <- function(par, t0, t, y, wt){
   d_log_fy_delta <- (digamma(alpha+beta)-digamma(alpha)+log(y[Iwt]))*alpha
   d_log_fy_eta <- (digamma(alpha+beta)-digamma(beta)+log(1-y[Iwt]))*beta
   
-  return(c( t(X) %*% W %*% d_log_fy_delta, 
-            t(X) %*% W %*% d_log_fy_eta ))
+  # W <- diag(wt[Iwt])                      # After the suggestion of a referee
+  # return(c( t(X) %*% W %*% d_log_fy_delta, 
+  #           t(X) %*% W %*% d_log_fy_eta ))
+  return(c( t(X) %*% (wt[Iwt] * d_log_fy_delta), # After the suggestion of a referee
+            t(X) %*% (wt[Iwt] * d_log_fy_eta )))
 }
 
 # Hessian matrix of local_log_lik with respect to its 4 parameters
@@ -234,7 +240,6 @@ matrix_Hessian_local_log_lik <- function(par, t0, t, y, wt){
   m <- length(t_t0)
   
   X <- cbind(rep(1,m),t_t0)
-  W <- diag(wt[Iwt])
   
   delta <- a0+a1*t_t0 # vector of length equal to length(t)
   eta   <- b0+b1*t_t0 # vector of length equal to length(t)
@@ -254,13 +259,18 @@ matrix_Hessian_local_log_lik <- function(par, t0, t, y, wt){
   d2_log_fy_eta2 <- 
     (trigamma(alpha+beta)-trigamma(beta))*beta^2 + d_log_fy_eta
   
-  V_delta_2 <- diag(d2_log_fy_delta2)
-  V_delta_eta <- diag(d2_log_fy_delta_eta)
-  V_eta_2 <- diag(d2_log_fy_eta2)
-  
-  J <-   rbind(
-    cbind( t(X) %*% W %*% V_delta_2 %*% X, t(X) %*% W %*% V_delta_eta %*% X ),   
-    cbind( t(X) %*% W %*% V_delta_eta %*% X, t(X) %*% W %*% V_eta_2 %*% X )   
+  # V_delta_2 <- diag(d2_log_fy_delta2) # After the suggestion of a referee
+  # V_delta_eta <- diag(d2_log_fy_delta_eta)
+  # V_eta_2 <- diag(d2_log_fy_eta2)
+  # 
+  # W <- diag(wt[Iwt])    
+  # J <-   rbind(
+  #   cbind( t(X) %*% W %*% V_delta_2 %*% X, t(X) %*% W %*% V_delta_eta %*% X ),   
+  #   cbind( t(X) %*% W %*% V_delta_eta %*% X, t(X) %*% W %*% V_eta_2 %*% X )   
+  # )
+  J <-   rbind(  # After the suggestion of a referee
+    cbind( t(X) %*% (wt[Iwt] * (d2_log_fy_delta2 * X))   , t(X) %*% (wt[Iwt] * (d2_log_fy_delta_eta * X)) ),   
+    cbind( t(X) %*% (wt[Iwt] * (d2_log_fy_delta_eta * X)), t(X) %*% (wt[Iwt] * (d2_log_fy_eta2 * X)) )   
   )
   
   return(J)
@@ -336,14 +346,17 @@ loc_lik_Beta <- function(t,y,h,
 # myBeta: if TRUE use my_dbeta, otherwise
 # mv: if TRUE  par1: log(mu/(1-mu)),    par2: log(var)
 #     if FLASE par1: log(alpha), par2: log(beta)
-loc_lik_Beta_with_loo <- function(t,y,h, newt=t,
+loc_lik_Beta_with_loo <- function(t,y,h, 
+                                  newt=seq(min(t),max(t),length=101),
                          method="Nelder-Mead", gr=NULL, 
                          myBeta=FALSE, mv = FALSE, kern="normal"){
   lt <- length(t)
   lnt <- length(newt)
-  loo_decrement <- loologlik <- loglik <- deltat <- etat <- numeric(lnt)
-  infl <- ab <- matrix(nrow = lnt, ncol=4)
-
+  deltant <- etant <- numeric(lnt)
+  abnt <- matrix(nrow = lnt, ncol=4)
+  loo_decrement <- loologlik <- loglik <- deltat <- etat <- numeric(lt)
+  infl <- ab <- matrix(nrow = lt, ncol=4)
+  
   for (j in (1:lnt)){
     wt <- Wkern((t-newt[j])/h, kern=kern) # We follow Loader 1999, eq (2.2)
     #    wt <- wt/sum(wt)
@@ -374,10 +387,19 @@ loc_lik_Beta_with_loo <- function(t,y,h, newt=t,
                      t0=newt[j], t=t[Iwt], y=y[Iwt], wt=wt[Iwt])
       res_opt$par <- res_opt$estimate
     }
-    deltat[j] <- res_opt$par[1]
-    etat[j] <- res_opt$par[3]
-    ab[j,] <- res_opt$par
-    
+    deltant[j] <- res_opt$par[1]
+    etant[j] <- res_opt$par[3]
+    abnt[j,] <- res_opt$par
+  }
+  
+  # we interpolate the results (deltant, etant)
+  # to obtain an approximation of (deltat, etat)
+  ab[,1] <- deltat <- approx(newt, deltant, xout=t, rule = 2)$y
+  ab[,3] <- etat   <- approx(newt, etant,   xout=t, rule = 2)$y
+  ab[,2] <- approx(newt, abnt[,2],   xout=t, rule = 2)$y
+  ab[,4] <- approx(newt, abnt[,4],   xout=t, rule = 2)$y
+  
+  for (j in (1:lt)){
     # abt <- loclikBeta_t$ab
     # deltat <- loclikBeta_t$deltat
     # etat <- loclikBeta_t$etat
@@ -388,6 +410,7 @@ loc_lik_Beta_with_loo <- function(t,y,h, newt=t,
     d_log_fy_etat <- (digamma(alphat+betat)-digamma(betat)+log(1-y[j]))*betat
     grad_log_fy <- cbind(d_log_fy_deltat,d_log_fy_etat)
     
+    wt <- Wkern((t-t[j])/h, kern=kern)
     Jj <- -matrix_Hessian_local_log_lik(par=ab[j,], t[j], t, y, wt)
     infl_j <- solve(Jj)[c(1,3),c(1,3)]*Wkern(0, kern=kern) # We follow Loader 1999, eq (2.28)
     infl[j,] <- infl_j
@@ -403,6 +426,7 @@ loc_lik_Beta_with_loo <- function(t,y,h, newt=t,
   sumloglik <- sum(loglik)
   sumloologlik <- sum(loologlik)
   return(list(newt=newt, 
+              deltant=deltant, etant=etant, abnt=abnt, 
               deltat=deltat, etat=etat, ab=ab, 
               loglik=loglik, loologlik=loologlik, 
               sumloglik=sumloglik, sumloologlik=sumloologlik,
@@ -421,7 +445,8 @@ loc_lik_Beta_with_loo <- function(t,y,h, newt=t,
 # t, y vectors of length m with the observed data
 # newt: vector with points at which we estimate the Beta log(parameters)
 # h: bandwidth to compute weights using a Gaussian kernel
-loc_lik_Beta_nlm <- function(t,y,h,newt=seq(min(t),max(t),length=101), 
+loc_lik_Beta_nlm <- function(t,y,h,
+                             newt=seq(min(t),max(t),length=101), 
                              myBeta=FALSE, mv=FALSE, kern="normal"){
   lt <- length(t)
   lnt <- length(newt)
@@ -532,11 +557,11 @@ infl_looCV_loclikBeta <- function(t, y, lh=10,
     # print(paste(k,"of",lvh))
     h <- vh[k]
     if (method!="nlm"){
-      loclikBeta_t <- loc_lik_Beta(t,y, h, newt = t,
+      loclikBeta_t <- loc_lik_Beta(t,y, h, newt = newt,
                                    method=method, gr=gr,
                                    myBeta=myBeta, mv=mv, kern=kern)
     }else{
-      loclikBeta_t <- loc_lik_Beta_nlm(t,y, h, newt = t,
+      loclikBeta_t <- loc_lik_Beta_nlm(t,y, h, newt = newt,
                                        myBeta=myBeta, mv=mv, kern=kern)
     }
     abt <- loclikBeta_t$ab
@@ -583,28 +608,35 @@ infl_looCV_loclikBeta <- function(t, y, lh=10,
 # vh: vector of possible bandwidth values h. 
 #     By default: vh=seq((max(t)-min(t))/20,(max(t)-min(t))/2,length=lh)
 # lh: length of the default value for vh
-infl_looCV_loclikBeta_2nd <- function(t, y, lh=10,
+infl_looCV_loclikBeta_2nd <- function(t, y, 
+                                      newt=seq(min(t),max(t),length=101),
+                                      lh=10,
                                   vh=seq((max(t)-min(t))/20,(max(t)-min(t))/2,length=lh),
                                   method="Nelder-Mead", gr=NULL, 
                                   myBeta=FALSE, mv=FALSE, kern="normal"){
   lvh <- length(vh)
   m <- length(t)
+  mnt <- length(newt)
   loologlik <- numeric(lvh)
   loo_decrement <- matrix(nrow=lvh, ncol=m)
+  deltant_h <- etant_h <- matrix(nrow=lvh, ncol=mnt)
   infl <- array(dim=c(lvh,m,4))
   
   for (k in (1:lvh)){
     # print(paste(k,"of",lvh))
     h <- vh[k]
-    loclikBeta_t <- loc_lik_Beta_with_loo(t,y, h, newt = t,
+    loclikBeta_t <- loc_lik_Beta_with_loo(t,y, h, newt = newt,
                                    method=method, gr=gr,
                                    myBeta=myBeta, mv=mv, kern=kern)
     loologlik[k] <- loclikBeta_t$sumloologlik
     loo_decrement[k,] <- loclikBeta_t$loo_decrement
     infl[k,,] <- loclikBeta_t$infl
+    deltant_h[k,] <- loclikBeta_t$deltant
+    etant_h[k,] <- loclikBeta_t$etant
   }
-  return(list(vh=vh,loologlik=loologlik,
-              infl=infl,loo_decrement=loo_decrement))
+  return(list(vh=vh, loologlik=loologlik,
+              infl=infl, loo_decrement=loo_decrement,
+              deltant_h=deltant_h, etant_h=etant_h))
 }
 
 ####

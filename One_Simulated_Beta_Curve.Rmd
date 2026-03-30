@@ -1,7 +1,7 @@
 ---
 title: "One simulated Beta curve"
 author: "Pedro Delicado and Nihan Acar-Denizli"
-date: "2025-10-18"
+date: "2026-03-28"
 output:
   html_document: default
   pdf_document: default
@@ -16,7 +16,8 @@ set.seed(12321)
 ## Defining the curves $\alpha(t)$ and $\beta(t)$
 
 ```{r}
-m <- 201 # 1001 # 201
+# sample size
+m <- 1001 # 501 # 201
 t <- seq(0,1,length=m)
 
 Cte <- .75
@@ -68,7 +69,7 @@ plot(t,sqrt(sigma2))
 ```{r}
 Y <- rbeta(m,shape1 = alpha, shape2 = beta)
 
-plot(t,t(Y), ylim=c(0,1), pch=19)
+plot(t,Y, ylim=c(0,1), pch=19)
 lines(t,mu,lwd=2)
 lines(t,mu+qnorm(.9)*sqrt(sigma2),lwd=2,col=2,lty=2)
 lines(t,mu+qnorm(.1)*sqrt(sigma2),lwd=2,col=2,lty=2)
@@ -91,6 +92,22 @@ legend("topright",
        bty="n", cex=.5, seg.len = 3.5)
 ```
 
+**Validation set.**
+
+```{r}
+#set.seed(56473)
+# sample size for the validation set
+m_val <- 1001 #2001
+t_val <- seq(0, 1, length=m_val) # sort(runif(m_val))
+
+alpha_tval <- exp(Cte*(a0+a1*t_val + a2*(t_val - .5)^2))
+beta_tval <-  exp(Cte*(b0+b1*t_val + b2*t_val^2))
+
+Y_val <- rbeta(m_val, shape1 = alpha_tval, shape2 = beta_tval)
+
+plot(t_val,Y_val, ylim=c(0,1), pch=19)
+```
+
 
 ## Estimation
 
@@ -107,10 +124,13 @@ source("local_constant_functions.R")
 ### Estimation: Local constant likelihood
 
 ```{r}
-# Sample of size m=201
+# Sample of size m=1001
 # t <- t
 y <- Y
-newt <- seq(0,1,length=101) 
+# size of the grid 'newt'
+mt <- 101
+newt <- seq(0,1,length=mt)
+
 mv <- FALSE
 myBeta <- FALSE
 h <- .06 # .075  # (.06 is h_star, found later)
@@ -166,10 +186,10 @@ lines(newt,q975t,col=4,lty=4,lwd=3)
 ### Estimation: Local linear likelihood
 
 ```{r}
-# Sample of size m=201
+# Sample of size m=1001
 # t <- t
 y <- Y
-newt <- seq(0,1,length=101) 
+# newt <- seq(0,1,length=101) 
 mv <- FALSE
 myBeta <- FALSE
 h <- .12 # .1  (.12 is h_star, found later) 
@@ -264,8 +284,12 @@ if (do_pdf) dev.off()
 
 #### Computing time
 
-```{r, eval=FALSE, echo=FALSE}
+```{r}
 library(microbenchmark)
+```
+
+
+```{r, eval=FALSE, echo=FALSE}
 mb_times <- microbenchmark(
   lc_Nelder_Mead=loc_lik_Beta_2(t=t,y=y, h=h, newt=newt, myBeta=myBeta, mv=mv),
   lc_BFGS=loc_lik_Beta_2(t=t,y=y, h=h, newt=newt, myBeta=myBeta, mv=mv, method="BFGS", gr=grad_local_log_lik_2),
@@ -279,10 +303,12 @@ mb_times <- microbenchmark(
 
 
 ```{r, fig.width=7,fig.height=5, eval=FALSE, echo=FALSE}
-if (do_pdf) pdf(file="box_plot_micro_bench_m_201.pdf", width=7, height=5)
-#if (do_pdf) pdf(file="box_plot_micro_bench_m_1001.pdf", width=7, height=5)
+#if (do_pdf) pdf(file="box_plot_micro_bench_m_201.pdf", width=7, height=5)
+if (do_pdf) pdf(file="box_plot_micro_bench_m_1001.pdf", width=7, height=5)
 summary(mb_times)
 # m=201:
+##
+# First submission: October 2025
 #Unit: milliseconds
 #             expr       min        lq       mean     median        uq       max neval
 # 1 lc_Nelder_Mead  218.5858  239.9247  250.22380  243.63100  250.3775  298.1790    10
@@ -292,7 +318,20 @@ summary(mb_times)
 # 5        ll_BFGS  433.7535  469.0023  517.67281  504.63940  527.2358  655.7318    10
 # 6         ll_NLM  446.1252  454.3509  512.62236  492.01160  538.4956  732.9094    10
 #
+##
+# Second submission: March 2026
+# Unit: milliseconds
+#            expr       min        lq       mean     median        uq       max neval   cld
+#  lc_Nelder_Mead  169.1762  172.9005  177.91147  177.96825  181.6806  188.5828    10 a    
+#         lc_BFGS   66.8573   68.3761   74.23814   74.03155   80.3090   84.3417    10  b   
+#          lc_NLM   38.9405   39.4720   43.96864   41.38160   50.6137   51.4918    10  b   
+#  ll_Nelder_Mead 1476.0505 1491.7396 1540.29687 1546.53740 1568.8772 1643.7574    10   c  
+#         ll_BFGS  308.2743  315.0886  327.27678  320.09910  339.0796  366.4639    10    d 
+#          ll_NLM  359.6628  374.0655  382.20985  378.43725  384.2932  424.1071    10     e
+####
 # m=1001:
+##
+# First submission: October 2025
 # Unit: milliseconds
 #            expr       min        lq      mean    median        uq        max neval
 #  lc_Nelder_Mead 1091.6772 1169.9430 1212.5945 1226.2528 1255.3913  1300.0997    10
@@ -301,6 +340,17 @@ summary(mb_times)
 #  ll_Nelder_Mead 9414.1943 9582.6263 9750.1471 9741.9744 9920.1234 10080.0480    10
 #         ll_BFGS 1630.2858 1656.0706 1700.2701 1699.5673 1739.3714  1792.3576    10
 #          ll_NLM 2252.2240 2286.9975 2331.0192 2315.5427 2368.9760  2494.0073    10
+##
+# Second submission: March 2026
+# Unit: milliseconds
+#            expr       min        lq      mean    median        uq       max neval    cld
+#  lc_Nelder_Mead  746.8826  752.0027  769.8930  759.9375  769.5706  826.3411    10 a     
+#         lc_BFGS  381.0127  387.1707  395.0858  395.6788  400.2642  410.3662    10  b    
+#          lc_NLM  151.6345  154.5403  157.6115  155.2358  157.4352  178.4908    10   c   
+#  ll_Nelder_Mead 6325.5503 6376.4893 6501.9413 6414.5394 6481.9302 7201.1633    10    d  
+#         ll_BFGS 1114.2651 1126.8117 1174.6135 1152.8555 1217.1820 1318.5205    10     e 
+#          ll_NLM 1675.0760 1686.8989 1752.7208 1756.0758 1781.8698 1881.4473    10      f
+#
 boxplot(mb_times, las=2, xlab="", cex.axis=.6)
 if (do_pdf) dev.off()
 ```
@@ -308,25 +358,27 @@ if (do_pdf) dev.off()
 ```{r, echo=FALSE, eval=FALSE}
 if (m==201){
   save.image(file="One_Simulated_Beta_Curve_m_201.Rdata")
+  # save.image(file="One_Simulated_Beta_Curve_m_201_March_2026_Portatil_Pedro.Rdata")
 }
 if (m==1001){
   save.image(file="One_Simulated_Beta_Curve_m_1001.Rdata")
+  # save.image(file="One_Simulated_Beta_Curve_m_1001_March_2026_Portatil_Pedro.Rdata")
 }
 ```
 
 
-**Conclusions:**
+**Conclusions: (Second submission, March 2026)**
 
 The 3 optimization methods produce essentially the same estimation results, with different computation times:
   
   - In local constant, NLM is the fastest method, followed by BFGS and them Nelder-Mead
-  - In local linear and m=201, NLM is the fastest method, with times almost equal to BFGS, and them Nelder-Mead much slower.
-  - In local linear and m=1001, BFGS is the fastest method, followed by NLM and them Nelder-Mead
-  - For $m=201$, Local constant NLM is around 10 times faster than local linear BFGS.
-  - For $m=1001$, Local constant NLM is around 6-7 times faster than local linear BFGS.
-  - For $m=1001$ the computation times are around 5 times those of $m=201$ (time proportional to sample size $m$).
+  - In local linear BFGS is the fastest method, followed by NLM and them Nelder-Mead
+  - For $m=201$, Local constant NLM is around 7.7 times faster than local linear BFGS.
+  - For $m=1001$, Local constant NLM is around 7.4 times faster than local linear BFGS.
+  - For $m=1001$ the computation times are between 3.6 and 5.3 times those of $m=201$ (time less than proportional to sample size $m$).
   
-So we decide
+So we decide: 
+*"we will use nlm for local constant likelihood estimation, and optim with BFGS for local linear cases."*
 
 
 ### Bandwidth choice 
@@ -334,10 +386,34 @@ So we decide
 #### Local constant Beta: looCV, approximated looCV, and k-fold CV for one curve
 
 ```{r} 
-vh<- seq(.02,.1, by=.02)
+Kh <- 15
+vh_lc_201  <- seq(.03,.07, length=Kh) # range(h_val_set) 100 simul
+vh_lc_501  <- seq(.02,.055, length=Kh) # 
+vh_lc_1001 <- seq(.014,.045, length=Kh)# 
+vh_ll_201  <- seq(.058,.2, length=Kh)  # 
+vh_ll_501  <- seq(.032,.175, length=Kh) # 
+vh_ll_1001 <- seq(.032,.16, length=Kh)# 
+
+
+if (m==201) {
+  vh_lc <- vh_lc_201
+  vh_ll <- vh_ll_201
+}
+if (m==501) {
+  vh_lc <- vh_lc_501
+  vh_ll <- vh_ll_501
+}
+if (m==1001) {
+  vh_lc <- vh_lc_1001
+  vh_ll <- vh_ll_1001
+}
+```
+
+
+```{r} 
 system.time(
 loo_1sim <- looCV_loclikBeta_2(t, y,
-                 vh=vh,
+                 vh=vh_lc,
                  method="nlm", gr=grad_local_log_lik_2, 
                  myBeta=FALSE, mv=FALSE)
 )
@@ -349,17 +425,16 @@ loo_1sim <- looCV_loclikBeta_2(t, y,
        # usuari       sistema transcorregut 
        #  10.60          0.09         11.19 
 
-h_star <- h_loo <- loo_1sim$vh[which.max(loo_1sim$loglik)]
+h_star <- h_loo <- loo_1sim$vh[which.max(loo_1sim$loglik)] 
 
-plot(loo_1sim$vh, loo_1sim$loglik)
+plot(loo_1sim$vh, loo_1sim$loglik/m)
 abline(v=h_loo,col=2)
 ```
 
 ```{r} 
-vh<- seq(.02,.1, by=.02)
 system.time(
-infl_1sim <- infl_looCV_loclikBeta_2nd_2(t, y,
-                 vh=vh,
+infl_1sim <- infl_looCV_loclikBeta_2nd_2(t, y, newt = newt,
+                 vh=vh_lc,
                  method="nlm", gr=grad_local_log_lik_2, 
                  myBeta=FALSE, mv=FALSE)
 )
@@ -371,17 +446,16 @@ infl_1sim <- infl_looCV_loclikBeta_2nd_2(t, y,
        # usuari       sistema transcorregut 
        # 170.31         22.12        199.03
          
-h_star <- h_loo <- infl_1sim$vh[which.max(infl_1sim$loologlik)]
+h_star <- h_infl <- infl_1sim$vh[which.max(infl_1sim$loologlik)]
 
-plot(infl_1sim$vh, infl_1sim$loologlik)
-abline(v=h_loo,col=2)
+plot(infl_1sim$vh, infl_1sim$loologlik/m)
+abline(v=h_infl, col=2)
 ```
 
 ```{r} 
-vh<- seq(.02,.1, by=.02)
 system.time(
 kfCV_1sim <- k_fold_CV_loclikBeta_2(t, y,
-                 vh=vh,
+                 vh=vh_lc,
                  method="nlm", gr=grad_local_log_lik_2, 
                  myBeta=FALSE, mv=FALSE)
 )
@@ -395,9 +469,47 @@ kfCV_1sim <- k_fold_CV_loclikBeta_2(t, y,
 
 h_star_lc <- h_star <- h_kfCV <- kfCV_1sim$vh[which.max(kfCV_1sim$loglik)]
 
-plot(kfCV_1sim$vh, kfCV_1sim$loglik)
+plot(kfCV_1sim$vh, kfCV_1sim$loglik/m)
 abline(v=h_kfCV,col=2)
 ```
+
+```{r log_lik_validation_set}
+Kh <- length(vh_lc)
+mean_log_lik_val_set_lc <- numeric(Kh)
+for (k in 1:Kh){
+  mean_log_lik_val_set_lc[k] <- 
+    log_lik_Beta_val_set(tval=t_val, yval=Y_val, 
+#    log_lik_Beta_val_set(tval=t, yval=Y, # training sample
+                         newt=newt, 
+                         deltant=infl_1sim$deltant[k,], 
+                         etant=infl_1sim$etant[k,])
+}
+h_star_lc <- h_val_set <- vh_lc[which.max(mean_log_lik_val_set_lc)]
+plot(vh_lc, mean_log_lik_val_set_lc)
+abline(v=h_val_set,col=2)
+```
+
+```{r, fig.width=6, fig.asp=1}
+rg_log_lik <- range(c(mean_log_lik_val_set_lc, loo_1sim$loglik/m,
+                infl_1sim$loologlik/m, kfCV_1sim$loglik/m))
+dh <- diff(range(vh_lc))/201
+plot(vh_lc, mean_log_lik_val_set_lc, type="b", col="black", lwd=2, 
+     ylim=rg_log_lik, xlab="h", 
+     ylab="log-likelihood", 
+     main="Estimates of the log-likelihood mean (local constant)")
+abline(v=h_val_set,col="black", lty=2)
+lines(vh_lc, loo_1sim$loglik/m, type="b", col="red", lwd=2)
+abline(v=h_loo-dh/2, col="red", lty=2)
+lines(vh_lc, infl_1sim$loologlik/m, type="b", col="darkgreen", lwd=2)
+abline(v=h_infl+dh, col="darkgreen", lty=2)
+lines(vh_lc, kfCV_1sim$loglik/m, type="b", col="blue", lwd=2)
+abline(v=h_kfCV+dh/2, col="blue", lty=2)
+legend("topright",
+       c("Valid.set", "loo-CV", "approx.loo", "k-fold-CV"),
+       col=c("black", "red", "darkgreen", "blue"), lty=1, lwd=2,
+       bty="n", cex=.8, seg.len = 3.5)
+```
+
 
 ```{r}
 loclikBeta_out_lc <- loclikBeta_out <- 
@@ -445,10 +557,9 @@ lines(newt,q975t,col=4,lty=4,lwd=3)
 #### Local linear Beta: looCV, approximated looCV, and k-fold CV for one curve
 
 ```{r} 
-vh<- seq(.1,.2, by=.02)
 system.time(
 loo_1sim <- looCV_loclikBeta(t, y,
-                 vh=vh,
+                 vh=vh_ll,
                  method="BFGS", gr=grad_local_log_lik, 
                  myBeta=FALSE, mv=FALSE)
 )
@@ -462,15 +573,14 @@ loo_1sim <- looCV_loclikBeta(t, y,
 
 h_star <- h_loo <- loo_1sim$vh[which.max(loo_1sim$loglik)]
 
-plot(loo_1sim$vh, loo_1sim$loglik)
+plot(loo_1sim$vh, loo_1sim$loglik/m)
 abline(v=h_loo,col=2)
 ```
 
 ```{r} 
-vh<- seq(.1,.2, by=.02)
 system.time(
-infl_1sim <- infl_looCV_loclikBeta_2nd(t, y,
-                 vh=vh,
+infl_1sim <- infl_looCV_loclikBeta_2nd(t, y, newt = newt,
+                 vh=vh_ll,
                  method="BFGS", gr=grad_local_log_lik, 
                  myBeta=FALSE, mv=FALSE)
 )
@@ -482,17 +592,16 @@ infl_1sim <- infl_looCV_loclikBeta_2nd(t, y,
        # usuari       sistema transcorregut 
        # 305.09         28.85        341.17
          
-h_star <- h_loo <- infl_1sim$vh[which.max(infl_1sim$loologlik)]
+h_star <- h_infl <- infl_1sim$vh[which.max(infl_1sim$loologlik)]
 
-plot(infl_1sim$vh, infl_1sim$loologlik)
-abline(v=h_loo,col=2)
+plot(infl_1sim$vh, infl_1sim$loologlik/m)
+abline(v=h_infl,col=2)
 ```
 
 ```{r} 
-vh<- seq(.1,.2, by=.02)
 system.time(
 kfCV_1sim <- k_fold_CV_loclikBeta(t, y,
-                 vh=vh,
+                 vh=vh_ll,
                  method="BFGS", gr=grad_local_log_lik, 
                  myBeta=FALSE, mv=FALSE)
 )
@@ -506,8 +615,45 @@ kfCV_1sim <- k_fold_CV_loclikBeta(t, y,
          
 h_star_ll <- h_star <- h_kfCV <- kfCV_1sim$vh[which.max(kfCV_1sim$loglik)]
 
-plot(kfCV_1sim$vh, kfCV_1sim$loglik)
+plot(kfCV_1sim$vh, kfCV_1sim$loglik/m)
 abline(v=h_kfCV,col=2)
+```
+
+```{r log_lik_validation_set_ll}
+Kh <- length(vh_ll)
+mean_log_lik_val_set_ll <- numeric(Kh)
+for (k in 1:Kh){
+  mean_log_lik_val_set_ll[k] <- 
+    log_lik_Beta_val_set(tval=t_val, yval=Y_val, 
+#    log_lik_Beta_val_set(tval=t, yval=Y, # training sample
+                         newt=newt, 
+                         deltant=infl_1sim$deltant[k,], 
+                         etant=infl_1sim$etant[k,])
+}
+h_star_ll <- h_val_set <- vh_ll[which.max(mean_log_lik_val_set_ll)]
+plot(vh_ll, mean_log_lik_val_set_ll)
+abline(v=h_val_set,col=2)
+```
+
+```{r, fig.width=6, fig.asp=1}
+rg_log_lik <- range(c(mean_log_lik_val_set_ll, loo_1sim$loglik/m,
+                infl_1sim$loologlik/m, kfCV_1sim$loglik/m))
+dh <- diff(range(vh_ll))/201
+plot(vh_ll, mean_log_lik_val_set_ll, type="b", col="black", lwd=2, 
+     ylim=rg_log_lik, xlab="h", 
+     ylab="log-likelihood", 
+     main="Estimates of the log-likelihood mean (local linear)")
+abline(v=h_val_set,col="black", lty=2)
+lines(vh_ll, loo_1sim$loglik/m, type="b", col="red", lwd=2)
+abline(v=h_loo-dh/2, col="red", lty=2)
+lines(vh_ll, infl_1sim$loologlik/m, type="b", col="darkgreen", lwd=2)
+abline(v=h_infl+dh, col="darkgreen", lty=2)
+lines(vh_ll, kfCV_1sim$loglik/m, type="b", col="blue", lwd=2)
+abline(v=h_kfCV+dh/2, col="blue", lty=2)
+legend("topright",
+       c("Valid.set", "loo-CV", "approx.loo", "k-fold-CV"),
+       col=c("black", "red", "darkgreen", "blue"), lty=1, lwd=2,
+       bty="n", cex=.8, seg.len = 3.5)
 ```
 
 ```{r}
@@ -559,30 +705,38 @@ lines(newt,q975t,col=4,lty=4,lwd=3)
 library(microbenchmark)
 band_choice_times <- microbenchmark(
   lc_loo= looCV_loclikBeta_2(t, y,
-                 vh=vh,
+                 vh=vh_lc,
                  method="nlm", gr=grad_local_log_lik_2, 
                  myBeta=FALSE, mv=FALSE),
-  lc_infl= infl_looCV_loclikBeta_2nd_2(t, y,
-                 vh=vh,
+  lc_infl_newt= infl_looCV_loclikBeta_2nd_2(t, y, newt = newt, 
+                 vh=vh_lc,
+                 method="nlm", gr=grad_local_log_lik_2, 
+                 myBeta=FALSE, mv=FALSE),
+  lc_infl_t= infl_looCV_loclikBeta_2nd_2(t, y, newt = t, 
+                 vh=vh_lc,
                  method="nlm", gr=grad_local_log_lik_2, 
                  myBeta=FALSE, mv=FALSE),
   lc_kfold= k_fold_CV_loclikBeta_2(t, y,
-                 vh=vh,
+                 vh=vh_lc,
                  method="nlm", gr=grad_local_log_lik_2, 
                  myBeta=FALSE, mv=FALSE),
   ll_loo= looCV_loclikBeta(t, y,
-                 vh=vh,
+                 vh=vh_ll,
                  method="BFGS", gr=grad_local_log_lik, 
                  myBeta=FALSE, mv=FALSE),
-  ll_infl= infl_looCV_loclikBeta_2nd(t, y,
-                 vh=vh,
+  ll_infl_newt= infl_looCV_loclikBeta_2nd(t, y, newt = newt, 
+                 vh=vh_ll,
+                 method="BFGS", gr=grad_local_log_lik, 
+                 myBeta=FALSE, mv=FALSE),
+  ll_infl_t= infl_looCV_loclikBeta_2nd(t, y, newt = t, 
+                 vh=vh_ll,
                  method="BFGS", gr=grad_local_log_lik, 
                  myBeta=FALSE, mv=FALSE),
   ll_kfold= k_fold_CV_loclikBeta(t, y,
-                 vh=vh,
+                 vh=vh_ll,
                  method="BFGS", gr=grad_local_log_lik, 
                  myBeta=FALSE, mv=FALSE),
-  times=10
+  times=1#10
 )
 ```
 
@@ -591,6 +745,7 @@ band_choice_times <- microbenchmark(
 if (do_pdf) pdf(file="box_plot_band_choice_micro_bench_m_201.pdf", width=7, height=5)
 summary(band_choice_times)
 
+# First submission: October 2025
 # m=201:
 #Unit: milliseconds
 #       expr        min         lq       mean     median         uq        max neval
@@ -601,6 +756,7 @@ summary(band_choice_times)
 # 5  ll_infl 10814.6960 11049.5124 12788.4395 11610.1223 15000.6917 15525.6238    10
 # 6 ll_kfold  8295.9996  8451.5038  9517.7376  9643.1922 10283.9070 11475.2595    10
 
+# First submission: October 2025
 # m=1001:
 # Unit: seconds
 #      expr        min         lq       mean     median         uq       max neval
@@ -610,24 +766,36 @@ summary(band_choice_times)
 #    ll_loo 135.517630 140.330806 151.830124 146.554265 162.021360 185.84823    10
 #   ll_infl 343.550949 343.669805 349.527011 345.984666 356.156404 360.80805    10
 #  ll_kfold 111.513907 113.497857 117.563927 116.033302 117.839438 137.13751    10
+
+# Second submission: March 2026
+# m=201, with improvements indicated by a referee (l*_infl_t) and additionally using newt (l*_infl_newt)
+#Unit: milliseconds
+#           expr       min        lq      mean    median        uq       max neval    cld
+# 1       lc_loo  539.7746  572.2644  614.5809  593.5570  632.3777  784.4259    10 ab    
+# 2 lc_infl_newt  388.3701  400.3374  430.4969  416.0108  444.9771  538.4935    10 a     
+# 3    lc_infl_t  648.7639  657.1474  694.9789  681.4574  706.7859  840.4391    10  b    
+# 4     lc_kfold  468.3939  480.8862  515.2807  497.4156  509.5903  683.6932    10 ab    
+# 5       ll_loo 3700.1130 4059.0655 4128.8279 4110.6838 4220.1044 4401.2842    10   c   
+# 6 ll_infl_newt 2490.9220 2548.9307 2673.5424 2683.3203 2796.9169 2858.3282    10    d  
+# 7    ll_infl_t 4317.4134 4451.4858 4706.9631 4655.3300 4894.7835 5460.4156    10     e 
+# 8     ll_kfold 3224.7753 3357.2116 3559.4877 3417.5647 3784.1172 4214.0067    10      f
+
+# Second submission: March 2026
+# m=1001, with improvements indicated by a referee (l*_infl_t) and additionally using newt (l*_infl_newt)
+# Unit: seconds
+#           expr       min        lq       mean    median        uq        max neval cld
+# 1       lc_loo  9.183106  9.229596   9.346369  9.325855  9.429029   9.582135    10  a 
+# 2 lc_infl_newt  2.245036  2.269341   2.365959  2.370270  2.424894   2.552128    10  a 
+# 3    lc_infl_t 10.323495 10.489311  13.865372 10.840471 11.762904  38.266102    10  a 
+# 4     lc_kfold  7.406629  7.537675   8.183831  7.642478  9.092389  10.011366    10  a 
+# 5       ll_loo 68.068805 68.509056  73.004088 69.572200 71.251179  98.533045    10   b
+# 6 ll_infl_newt 14.853825 15.072270  15.312813 15.117562 15.273266  16.970369    10  a 
+# 7    ll_infl_t 76.704342 78.074092 103.118566 79.959147 96.455950 277.213510    10   b
+# 8     ll_kfold 55.902835 56.007436  71.802726 56.656960 57.865140 199.249612    10   b
+
 boxplot(band_choice_times, las=2, xlab="", cex.axis=.6)
 if (do_pdf) dev.off()
 ```
-
-
-```{r, echo=FALSE, eval=FALSE}
-save.image(file="band_choice_One_Simulated_Beta_Curve_m_201.Rdata")
-```
-
-**Conclusions:**
-
-We have compared 3 bandwidth choice methods for local constant and local linear likelihood estimation:
-  
-  - bandwidth choice methods in local constant is between 5 and 20 times faster than in local linear.
-  - 5-fold CV is slightly faster than loo (more clear when m=201 than when m=1001).
-  - approximated loo based on the influence function is considerable slower than loo and 5-fold CV: about 4 times slower in local constant estimation, and 1.2 times in local linear estimation.
-
-In conclusion, we find that the approximate LOO method based on the influence function does not reduce computation time compared to crude cross-validation (CV) methods. 
 
 
 
